@@ -1,0 +1,41 @@
+<resources>
+    <string name="app_name">Youcan</string>
+    <string name="channel_timer_name">Focus Timer</string>
+    <string name="channel_timer_desc">Active Pomodoro session status and countdown controls</string>
+    <string name="channel_reminders_name">Study Reminders</string>
+    <string name="channel_reminders_desc">Notifications for scheduled study sessions and countdowns</string>
+    <string name="channel_overlay_name">Overlay Controls</string>
+    <string name="channel_overlay_desc">Status of the floating study dock and island pill</string>
+
+    <!-- Quick Actions -->
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_start">Start</string>
+
+    <!-- Shortcuts -->
+    <string name="shortcut_start_timer_short">Start Focus</string>
+    <string name="shortcut_start_timer_long">Start Focus Session</string>
+    <string name="shortcut_tasks_short">Add Task</string>
+    <string name="shortcut_tasks_long">Add Study Task with Reminder</string>
+    <string name="shortcut_streaks_short">Streaks</string>
+    <string name="shortcut_streaks_long">Study Consistency Streaks</string>
+    <string name="shortcut_countdowns_short">Milestones</string>
+    <string name="shortcut_countdowns_long">Upcoming Exam Countdowns</string>
+    <string name="shortcut_stats_short">Stats</string>
+    <string name="shortcut_stats_long">Weekly Study Stats</string>
+
+    <!-- Widgets -->
+    <string name="widget_custom_name">Focus &amp; Study (Customizable)</string>
+    <string name="widget_custom_desc">Customizable widget with single or split combo layouts and themes</string>
+    <string name="widget_timer_name">Live Focus Timer (2x2)</string>
+    <string name="widget_timer_desc">Quick start, pause, resume, and track active study timers</string>
+    <string name="widget_tasks_name">Tasks &amp; Reminders (3x2)</string>
+    <string name="widget_tasks_desc">Today\'s study checklist with reminder badges and quick checkoff</string>
+    <string name="widget_dashboard_name">Study Dashboard Combo (4x2)</string>
+    <string name="widget_dashboard_desc">Dual-split dashboard with live timer controls and study tasks side-by-side</string>
+    <string name="widget_countdown_name">Exam Countdowns (2x2)</string>
+    <string name="widget_countdown_desc">Track upcoming exams, deadlines, and milestone targets</string>
+    <string name="widget_streak_name">Focus Streak (2x2)</string>
+    <string name="widget_streak_desc">Track daily study consistency and freeze streak status</string>
+</resources>

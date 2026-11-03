@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="start_timer"
+        android:enabled="true"
+        android:icon="@drawable/ic_notification"
+        android:shortcutShortLabel="@string/shortcut_start_timer_short"
+        android:shortcutLongLabel="@string/shortcut_start_timer_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="youcan://timer/start" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="add_task"
+        android:enabled="true"
+        android:icon="@drawable/ic_notification"
+        android:shortcutShortLabel="@string/shortcut_tasks_short"
+        android:shortcutLongLabel="@string/shortcut_tasks_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="youcan://tasks/add" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="milestones"
+        android:enabled="true"
+        android:icon="@drawable/ic_notification"
+        android:shortcutShortLabel="@string/shortcut_countdowns_short"
+        android:shortcutLongLabel="@string/shortcut_countdowns_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="youcan://countdowns" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="weekly_stats"
+        android:enabled="true"
+        android:icon="@drawable/ic_notification"
+        android:shortcutShortLabel="@string/shortcut_stats_short"
+        android:shortcutLongLabel="@string/shortcut_stats_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="youcan://stats" />
+    </shortcut>
+</shortcuts>
