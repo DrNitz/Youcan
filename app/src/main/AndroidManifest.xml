@@ -57,13 +57,21 @@
         <service
             android:name=".service.timer.FocusTimerService"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Focus timer countdown and session tracking" />
+        </service>
 
         <!-- Floating Dock & Island Overlay Service -->
         <service
             android:name=".service.overlay.FloatingOverlayService"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Floating study dock and overlay" />
+        </service>
 
         <!-- Exact Alarm Receiver -->
         <receiver

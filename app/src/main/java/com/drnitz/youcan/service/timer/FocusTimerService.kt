@@ -71,24 +71,29 @@ class FocusTimerService : Service() {
     }
 
     private fun promoteToForeground() {
-        val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            val notification = buildNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FocusTimerService", "Failed to promote service to foreground", e)
         }
     }
 
     private fun startTimer(subject: String, note: String) {
         serviceScope.launch {
             val userPrefs = app.preferences.userPreferencesFlow.first()
-            val totalSeconds = userPrefs.focusDurationMinutes * 60
+            val defaultDurationSeconds = userPrefs.focusDurationMinutes * 60
             sessionStartTimeMillis = System.currentTimeMillis()
             val current = TimerStateManager.snapshot.value
+            val totalSeconds = if (current.totalSeconds > 0) current.totalSeconds else defaultDurationSeconds
             val targetEnd = if (current.status == TimerStatus.RUNNING && current.targetEndRealtime > SystemClock.elapsedRealtime()) {
                 current.targetEndRealtime
             } else {
@@ -117,18 +122,22 @@ class FocusTimerService : Service() {
 
     private fun resumeTimer() {
         val current = TimerStateManager.snapshot.value
-        if (current.status == TimerStatus.PAUSED || current.status == TimerStatus.IDLE) {
-            val targetEnd = SystemClock.elapsedRealtime() + (current.remainingSeconds * 1000L)
-            TimerStateManager.updateSnapshot(
-                current.copy(
-                    status = TimerStatus.RUNNING,
-                    targetEndRealtime = targetEnd
-                )
-            )
-            promoteToForeground()
-            com.drnitz.youcan.widget.WidgetUpdateHelper.updateTimerWidgets(this@FocusTimerService)
-            runTimerLoop()
+        val remaining = if (current.remainingSeconds > 0) current.remainingSeconds else (25 * 60)
+        val targetEnd = if (current.status == TimerStatus.RUNNING && current.targetEndRealtime > SystemClock.elapsedRealtime()) {
+            current.targetEndRealtime
+        } else {
+            SystemClock.elapsedRealtime() + (remaining * 1000L)
         }
+        TimerStateManager.updateSnapshot(
+            current.copy(
+                status = TimerStatus.RUNNING,
+                remainingSeconds = remaining,
+                targetEndRealtime = targetEnd
+            )
+        )
+        promoteToForeground()
+        com.drnitz.youcan.widget.WidgetUpdateHelper.updateTimerWidgets(this@FocusTimerService)
+        runTimerLoop()
     }
 
     private fun pauseTimer() {
@@ -393,7 +402,8 @@ class FocusTimerService : Service() {
         fun isRunning(): Boolean = activeService != null
 
         fun startTimer(context: Context, subject: String = "General Study", note: String = "") {
-            val current = TimerStateManager.snapshot.value
+            TimerStateManager.init(context)
+            val current = TimerStateManager.getSnapshot(context)
             val totalSeconds = if (current.totalSeconds > 0) current.totalSeconds else (25 * 60)
             val targetEnd = SystemClock.elapsedRealtime() + (totalSeconds * 1000L)
 
@@ -418,16 +428,19 @@ class FocusTimerService : Service() {
             }
             try {
                 ContextCompat.startForegroundService(context, intent)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.e("FocusTimerService", "Failed to start service from startTimer", e)
+            }
             com.drnitz.youcan.widget.WidgetUpdateHelper.updateTimerWidgets(context)
         }
 
         fun pauseTimer(context: Context) {
+            TimerStateManager.init(context)
             val active = activeService
             if (active != null) {
                 active.pauseTimer()
             } else {
-                val current = TimerStateManager.snapshot.value
+                val current = TimerStateManager.getSnapshot(context)
                 val now = SystemClock.elapsedRealtime()
                 val remaining = if (current.targetEndRealtime > 0L) {
                     ((current.targetEndRealtime - now + 999L) / 1000L).toInt().coerceAtLeast(0)
@@ -441,42 +454,45 @@ class FocusTimerService : Service() {
                         targetEndRealtime = 0L
                     )
                 )
-                val intent = Intent(context, FocusTimerService::class.java).apply { action = ACTION_PAUSE }
-                try {
-                    ContextCompat.startForegroundService(context, intent)
-                } catch (_: Exception) {}
                 com.drnitz.youcan.widget.WidgetUpdateHelper.updateTimerWidgets(context)
             }
         }
 
         fun resumeTimer(context: Context) {
+            TimerStateManager.init(context)
             val active = activeService
             if (active != null) {
                 active.resumeTimer()
             } else {
-                val current = TimerStateManager.snapshot.value
-                val targetEnd = SystemClock.elapsedRealtime() + (current.remainingSeconds * 1000L)
+                val current = TimerStateManager.getSnapshot(context)
+                val remaining = if (current.remainingSeconds > 0) current.remainingSeconds else (25 * 60)
+                val targetEnd = SystemClock.elapsedRealtime() + (remaining * 1000L)
                 TimerStateManager.updateSnapshot(
                     current.copy(
                         status = TimerStatus.RUNNING,
+                        remainingSeconds = remaining,
                         targetEndRealtime = targetEnd
                     )
                 )
                 val intent = Intent(context, FocusTimerService::class.java).apply { action = ACTION_RESUME }
                 try {
                     ContextCompat.startForegroundService(context, intent)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    android.util.Log.e("FocusTimerService", "Failed to start service from resumeTimer", e)
+                }
                 com.drnitz.youcan.widget.WidgetUpdateHelper.updateTimerWidgets(context)
             }
         }
 
         fun addMinutes(context: Context, minutes: Int) {
-            val current = TimerStateManager.snapshot.value
+            TimerStateManager.init(context)
+            val current = TimerStateManager.getSnapshot(context)
             val addSeconds = minutes * 60
             val newRemaining = current.remainingSeconds + addSeconds
             val newTotal = current.totalSeconds + addSeconds
             val newTarget = if (current.status == TimerStatus.RUNNING) {
-                SystemClock.elapsedRealtime() + (newRemaining * 1000L)
+                val base = if (current.targetEndRealtime > 0L) current.targetEndRealtime else SystemClock.elapsedRealtime()
+                base + (addSeconds * 1000L)
             } else {
                 0L
             }
@@ -492,15 +508,17 @@ class FocusTimerService : Service() {
         }
 
         fun stopTimer(context: Context) {
+            TimerStateManager.init(context)
             val active = activeService
             if (active != null) {
                 active.stopTimer()
             } else {
-                val current = TimerStateManager.snapshot.value
+                val current = TimerStateManager.getSnapshot(context)
                 val focusDurationSeconds = if (current.totalSeconds > 0) current.totalSeconds else (25 * 60)
                 TimerStateManager.reset(focusDurationSeconds)
                 try {
-                    context.startService(Intent(context, FocusTimerService::class.java).apply { action = ACTION_STOP })
+                    val intent = Intent(context, FocusTimerService::class.java).apply { action = ACTION_STOP }
+                    context.stopService(intent)
                 } catch (_: Exception) {}
                 com.drnitz.youcan.widget.WidgetUpdateHelper.updateTimerWidgets(context)
             }

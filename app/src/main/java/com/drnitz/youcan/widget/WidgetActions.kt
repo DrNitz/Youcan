@@ -26,36 +26,60 @@ class OpenDeepLinkActionCallback : ActionCallback {
 class TimerStartActionCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         FocusTimerService.startTimer(context)
+        try { TimerGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { DashboardGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { YoucanGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        WidgetUpdateHelper.updateTimerWidgets(context)
     }
 }
 
 class TimerPauseActionCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         FocusTimerService.pauseTimer(context)
+        try { TimerGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { DashboardGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { YoucanGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        WidgetUpdateHelper.updateTimerWidgets(context)
     }
 }
 
 class TimerResumeActionCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         FocusTimerService.resumeTimer(context)
+        try { TimerGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { DashboardGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { YoucanGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        WidgetUpdateHelper.updateTimerWidgets(context)
     }
 }
 
 class TimerStopActionCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         FocusTimerService.stopTimer(context)
+        try { TimerGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { DashboardGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { YoucanGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        WidgetUpdateHelper.updateTimerWidgets(context)
     }
 }
 
 class TimerAddMinutesActionCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         FocusTimerService.addMinutes(context, 5)
+        try { TimerGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { DashboardGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { YoucanGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        WidgetUpdateHelper.updateTimerWidgets(context)
     }
 }
 
 class TimerSkipActionCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         FocusTimerService.skipPhase(context)
+        try { TimerGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { DashboardGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        try { YoucanGlanceWidget().update(context, glanceId) } catch (_: Exception) {}
+        WidgetUpdateHelper.updateTimerWidgets(context)
     }
 }
 

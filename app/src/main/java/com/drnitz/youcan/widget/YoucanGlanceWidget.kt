@@ -25,7 +25,6 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.appwidget.action.actionStartService
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -144,7 +143,12 @@ open class YoucanGlanceWidget(
             else -> theme.defaultAlpha
         }.coerceIn(0.20f, 1.0f)
 
-        // Load real dynamic data from Room & System
+        val activeComponents = when (layoutMode) {
+            WidgetLayoutMode.SINGLE -> setOf(comp1)
+            else -> setOf(comp1, comp2)
+        }
+
+        // Load real dynamic data from Room & System selectively based on active components
         val app = context.applicationContext as? YoucanApplication
         val db = app?.database
         val userPrefs = app?.preferences?.userPreferencesFlow?.firstOrNull() ?: UserPreferences()
@@ -152,12 +156,14 @@ open class YoucanGlanceWidget(
         val nowMillis = System.currentTimeMillis()
 
         // 1. Live Timer Snapshot
-        val timerSnapshot = TimerStateManager.snapshot.value
+        val timerSnapshot = TimerStateManager.getSnapshot(context)
 
         // 2. Active Countdowns
-        val upcomingCountdowns = try {
-            db?.countdownDao()?.getAllUpcomingCountdownsSync(nowMillis) ?: emptyList()
-        } catch (_: Exception) { emptyList() }
+        val upcomingCountdowns = if (activeComponents.contains(WidgetComponent.COUNTDOWN)) {
+            try {
+                db?.countdownDao()?.getAllUpcomingCountdownsSync(nowMillis) ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+        } else emptyList()
         val countdownIndex = sp.getInt("countdown_index_$glanceKey", 0)
         val nearestCountdown = if (upcomingCountdowns.isNotEmpty()) {
             upcomingCountdowns[((countdownIndex % upcomingCountdowns.size) + upcomingCountdowns.size) % upcomingCountdowns.size]
@@ -165,47 +171,56 @@ open class YoucanGlanceWidget(
         val upcomingCountdownsCount = upcomingCountdowns.size
 
         // 3. Focus Streak Data
-        val streakData = try {
-            val sessions = db?.sessionDao()?.getAllSessionsSync() ?: emptyList()
-            val freezes = db?.streakFreezeDao()?.getAllFreezesSync() ?: emptyList()
-            StreakRepository(db!!.sessionDao(), db.streakFreezeDao()).calculateStreak(
-                sessions = sessions,
-                freezes = freezes,
-                dailyGoalMinutes = userPrefs.dailyStudyGoalMinutes
-            )
-        } catch (_: Exception) { StreakData() }
+        val streakData = if (activeComponents.contains(WidgetComponent.STREAK) && db != null) {
+            try {
+                val sessions = db.sessionDao().getAllSessionsSync()
+                val freezes = db.streakFreezeDao().getAllFreezesSync()
+                StreakRepository(db.sessionDao(), db.streakFreezeDao()).calculateStreak(
+                    sessions = sessions,
+                    freezes = freezes,
+                    dailyGoalMinutes = userPrefs.dailyStudyGoalMinutes
+                )
+            } catch (_: Exception) { StreakData() }
+        } else StreakData()
 
         // 4. Today's Tasks
-        val todayTasks = try {
-            db?.dailyPlanDao()?.getPlansForDaySync(today.toEpochDay()) ?: emptyList()
-        } catch (_: Exception) { emptyList() }
+        val todayTasks = if (activeComponents.contains(WidgetComponent.TASKS)) {
+            try {
+                db?.dailyPlanDao()?.getPlansForDaySync(today.toEpochDay()) ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+        } else emptyList()
 
         // 5. Quote
-        val defaultQuoteIndex = ((today.toEpochDay() % QuoteProvider.quotes.size).toInt() + QuoteProvider.quotes.size) % QuoteProvider.quotes.size
-        val quoteIndex = when {
-            sp.contains("quote_index_$appWidgetId") -> sp.getInt("quote_index_$appWidgetId", defaultQuoteIndex)
-            sp.contains("quote_index_$glanceKey") -> sp.getInt("quote_index_$glanceKey", defaultQuoteIndex)
-            sp.contains("quote_index_global") -> sp.getInt("quote_index_global", defaultQuoteIndex)
-            else -> defaultQuoteIndex
-        }
-        val quote = QuoteProvider.getQuoteByIndex(quoteIndex)
+        val quote = if (activeComponents.contains(WidgetComponent.QUOTE)) {
+            val defaultQuoteIndex = ((today.toEpochDay() % QuoteProvider.quotes.size).toInt() + QuoteProvider.quotes.size) % QuoteProvider.quotes.size
+            val quoteIndex = when {
+                sp.contains("quote_index_$appWidgetId") -> sp.getInt("quote_index_$appWidgetId", defaultQuoteIndex)
+                sp.contains("quote_index_$glanceKey") -> sp.getInt("quote_index_$glanceKey", defaultQuoteIndex)
+                sp.contains("quote_index_global") -> sp.getInt("quote_index_global", defaultQuoteIndex)
+                else -> defaultQuoteIndex
+            }
+            QuoteProvider.getQuoteByIndex(quoteIndex)
+        } else QuoteProvider.quotes[0]
 
         // 6. Weekly Analytics
-        val zone = ZoneId.systemDefault()
-        val startOfWeekMillis = today.minusDays(today.dayOfWeek.value.toLong() - 1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val weekSessions = try {
-            db?.sessionDao()?.getSessionsBetweenSync(startOfWeekMillis, nowMillis) ?: emptyList()
-        } catch (_: Exception) { emptyList() }
-        val weekTotalMinutes = weekSessions.sumOf { it.durationSeconds } / 60
-        val weekCompletedCount = weekSessions.count { it.isCompleted }
+        val (weekTotalMinutes, weekCompletedCount) = if (activeComponents.contains(WidgetComponent.ANALYTICS)) {
+            val zone = ZoneId.systemDefault()
+            val startOfWeekMillis = today.minusDays(today.dayOfWeek.value.toLong() - 1).atStartOfDay(zone).toInstant().toEpochMilli()
+            val weekSessions = try {
+                db?.sessionDao()?.getSessionsBetweenSync(startOfWeekMillis, nowMillis) ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+            (weekSessions.sumOf { it.durationSeconds } / 60) to weekSessions.count { it.isCompleted }
+        } else (0 to 0)
 
         // 7. Usage Info
-        val usageSummary = try {
-            val usageList = UsageRepository(context, db!!.distractingAppDao(), SessionRepository(db.sessionDao())).getUsageForDay(today)
-            val totalMins = usageList.sumOf { it.totalTimeMillis } / 60_000
-            val topDistracting = usageList.firstOrNull { it.isDistracting }?.appName ?: ""
-            totalMins to topDistracting
-        } catch (_: Exception) { 0L to "" }
+        val usageSummary = if (activeComponents.contains(WidgetComponent.USAGE) && db != null) {
+            try {
+                val usageList = UsageRepository(context, db.distractingAppDao(), SessionRepository(db.sessionDao())).getUsageForDay(today)
+                val totalMins = usageList.sumOf { it.totalTimeMillis } / 60_000
+                val topDistracting = usageList.firstOrNull { it.isDistracting }?.appName ?: ""
+                totalMins to topDistracting
+            } catch (_: Exception) { 0L to "" }
+        } else (0L to "")
 
         provideContent {
             val size = LocalSize.current
@@ -603,10 +618,11 @@ open class YoucanGlanceWidget(
         rv.setOnClickPendingIntent(R.id.widget_timer_text, pi)
 
         val nowRealtime = SystemClock.elapsedRealtime()
-        val isRunning = snapshot.status == TimerStatus.RUNNING && (snapshot.targetEndRealtime > nowRealtime || snapshot.remainingSeconds > 0)
+        val hasValidTarget = snapshot.targetEndRealtime > nowRealtime
+        val isRunning = snapshot.status == TimerStatus.RUNNING && (hasValidTarget || (snapshot.targetEndRealtime == 0L && snapshot.remainingSeconds > 0))
 
         if (isRunning) {
-            val baseTime = if (snapshot.targetEndRealtime > nowRealtime) {
+            val baseTime = if (hasValidTarget) {
                 snapshot.targetEndRealtime
             } else {
                 nowRealtime + (snapshot.remainingSeconds * 1000L)
@@ -635,16 +651,6 @@ open class YoucanGlanceWidget(
         primary: Color,
         isCompact: Boolean
     ) {
-        val context = LocalContext.current
-        val pauseIntent = Intent(context, FocusTimerService::class.java).apply { action = FocusTimerService.ACTION_PAUSE }
-        val resumeIntent = Intent(context, FocusTimerService::class.java).apply { action = FocusTimerService.ACTION_RESUME }
-        val startIntent = Intent(context, FocusTimerService::class.java).apply { action = FocusTimerService.ACTION_START }
-        val stopIntent = Intent(context, FocusTimerService::class.java).apply { action = FocusTimerService.ACTION_STOP }
-        val addMinutesIntent = Intent(context, FocusTimerService::class.java).apply {
-            action = FocusTimerService.ACTION_ADD_MINUTES
-            putExtra(FocusTimerService.EXTRA_MINUTES, 5)
-        }
-
         Row(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically
@@ -655,7 +661,7 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color(0xFFE0A96D))
-                            .clickable(actionStartService(pauseIntent, isForegroundService = true))
+                            .clickable(actionRunCallback<TimerPauseActionCallback>())
                             .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -675,7 +681,7 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color.White.copy(alpha = 0.16f))
-                            .clickable(actionStartService(addMinutesIntent, isForegroundService = true))
+                            .clickable(actionRunCallback<TimerAddMinutesActionCallback>())
                             .padding(horizontal = if (isCompact) 8.dp else 12.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -695,7 +701,7 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color(0xFFE57373))
-                            .clickable(actionStartService(stopIntent, isForegroundService = false))
+                            .clickable(actionRunCallback<TimerStopActionCallback>())
                             .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -714,7 +720,7 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(primary)
-                            .clickable(actionStartService(resumeIntent, isForegroundService = true))
+                            .clickable(actionRunCallback<TimerResumeActionCallback>())
                             .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -734,7 +740,7 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color.White.copy(alpha = 0.16f))
-                            .clickable(actionStartService(addMinutesIntent, isForegroundService = true))
+                            .clickable(actionRunCallback<TimerAddMinutesActionCallback>())
                             .padding(horizontal = if (isCompact) 8.dp else 12.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -754,7 +760,7 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color(0xFFE57373))
-                            .clickable(actionStartService(stopIntent, isForegroundService = false))
+                            .clickable(actionRunCallback<TimerStopActionCallback>())
                             .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -773,7 +779,7 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(12.dp)
                             .background(primary)
-                            .clickable(actionStartService(startIntent, isForegroundService = true))
+                            .clickable(actionRunCallback<TimerStartActionCallback>())
                             .padding(horizontal = if (isCompact) 12.dp else 18.dp, vertical = if (isCompact) 9.dp else 11.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -793,7 +799,7 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(12.dp)
                             .background(Color.White.copy(alpha = 0.16f))
-                            .clickable(actionStartService(addMinutesIntent, isForegroundService = true))
+                            .clickable(actionRunCallback<TimerAddMinutesActionCallback>())
                             .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 9.dp else 11.dp),
                         contentAlignment = Alignment.Center
                     ) {

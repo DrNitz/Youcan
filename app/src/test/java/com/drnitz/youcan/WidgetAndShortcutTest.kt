@@ -196,4 +196,13 @@ class WidgetAndShortcutTest {
         assertEquals(com.drnitz.youcan.widget.QuoteWidgetReceiver::class.java.simpleName, "QuoteWidgetReceiver")
         assertEquals(com.drnitz.youcan.widget.UsageWidgetReceiver::class.java.simpleName, "UsageWidgetReceiver")
     }
+
+    @Test
+    fun timerActionCallbacks_classesInstantiable() {
+        assertNotNull(com.drnitz.youcan.widget.TimerStartActionCallback())
+        assertNotNull(com.drnitz.youcan.widget.TimerPauseActionCallback())
+        assertNotNull(com.drnitz.youcan.widget.TimerResumeActionCallback())
+        assertNotNull(com.drnitz.youcan.widget.TimerStopActionCallback())
+        assertNotNull(com.drnitz.youcan.widget.TimerAddMinutesActionCallback())
+    }
 }

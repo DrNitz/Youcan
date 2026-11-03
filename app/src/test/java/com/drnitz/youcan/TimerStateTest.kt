@@ -61,4 +61,11 @@ class TimerStateTest {
         assertEquals(30 * 60, resetState.remainingSeconds)
         assertEquals(1, resetState.currentCycle)
     }
+
+    @Test
+    fun getSnapshotReturnsCurrentSnapshotWhenIdle() {
+        val snapshot = TimerStateManager.getSnapshot()
+        assertEquals(TimerStatus.IDLE, snapshot.status)
+        assertEquals(25 * 60, snapshot.remainingSeconds)
+    }
 }

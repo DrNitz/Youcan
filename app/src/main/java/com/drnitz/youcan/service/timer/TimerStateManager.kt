@@ -128,6 +128,29 @@ object TimerStateManager {
         persistState(resetSnapshot)
     }
 
+    fun getSnapshot(context: Context? = null): TimerSnapshot {
+        if (prefs == null && context != null) {
+            init(context)
+        }
+        val current = _snapshot.value
+        if (current.status == TimerStatus.RUNNING && current.targetEndRealtime > 0L) {
+            val nowRealtime = SystemClock.elapsedRealtime()
+            val liveRemaining = ((current.targetEndRealtime - nowRealtime + 999L) / 1000L).toInt()
+            if (liveRemaining <= 0) {
+                val expired = current.copy(
+                    status = TimerStatus.IDLE,
+                    remainingSeconds = current.totalSeconds,
+                    targetEndRealtime = 0L
+                )
+                _snapshot.value = expired
+                persistState(expired)
+                return expired
+            }
+            return current.copy(remainingSeconds = liveRemaining)
+        }
+        return current
+    }
+
     private fun persistState(snapshot: TimerSnapshot) {
         val sp = prefs ?: return
         try {
@@ -142,7 +165,10 @@ object TimerStateManager {
                 .putString("timer_note", snapshot.note)
                 .putLong("timer_target_end_realtime", snapshot.targetEndRealtime)
                 .apply()
-            runCatching { com.drnitz.youcan.widget.WidgetUpdateHelper.updateAll(com.drnitz.youcan.YoucanApplication.instance) }
+            runCatching {
+                val app = com.drnitz.youcan.YoucanApplication.instance
+                com.drnitz.youcan.widget.WidgetUpdateHelper.updateTimerWidgets(app)
+            }
         } catch (_: Exception) {}
     }
 }
