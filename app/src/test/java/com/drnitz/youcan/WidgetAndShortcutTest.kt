@@ -16,13 +16,13 @@ class WidgetAndShortcutTest {
     @Test
     fun widgetPresets_allHaveValidProperties() {
         assertTrue(WIDGET_PRESETS.isNotEmpty())
-        assertEquals(6, WIDGET_PRESETS.size)
+        assertEquals(7, WIDGET_PRESETS.size)
 
         for (preset in WIDGET_PRESETS) {
             assertTrue(preset.id.isNotBlank())
             assertTrue(preset.name.isNotBlank())
             assertTrue(preset.description.isNotBlank())
-            assertTrue(preset.iconEmoji.isNotBlank())
+            assertNotNull(preset.icon)
             assertNotNull(preset.mode)
             assertNotNull(preset.comp1)
             assertNotNull(preset.comp2)
@@ -38,6 +38,10 @@ class WidgetAndShortcutTest {
         assertEquals(WidgetLayoutMode.SINGLE, pureTimer.mode)
         assertEquals(WidgetComponent.TIMER, pureTimer.comp1)
         assertEquals(WidgetBackgroundTheme.AMOLED, pureTimer.recommendedTheme)
+
+        val frosted = WIDGET_PRESETS.first { it.id == "frosted_focus" }
+        assertEquals(WidgetBackgroundTheme.FROSTED_GLASS, frosted.recommendedTheme)
+        assertEquals(0.70f, frosted.recommendedAlpha, 0.01f)
     }
 
     @Test
@@ -119,5 +123,77 @@ class WidgetAndShortcutTest {
             assertNotNull(comp.displayName)
             assertTrue(comp.displayName.isNotBlank())
         }
+    }
+
+    @Test
+    fun widgetThemes_allHaveValidColorsAndAlphas() {
+        val themes = WidgetBackgroundTheme.entries
+        assertEquals(6, themes.size)
+
+        for (theme in themes) {
+            assertTrue(theme.displayName.isNotBlank())
+            assertTrue(theme.defaultAlpha in 0.5f..1.0f)
+            assertTrue(theme.colorHex >= 0L)
+        }
+
+        val frosted = WidgetBackgroundTheme.FROSTED_GLASS
+        assertEquals("Frosted Glass", frosted.displayName)
+        assertEquals(0.70f, frosted.defaultAlpha, 0.01f)
+
+        val amoled = WidgetBackgroundTheme.AMOLED
+        assertEquals(1.0f, amoled.defaultAlpha, 0.01f)
+        assertEquals(0xFF000000L, amoled.colorHex)
+    }
+
+    @Test
+    fun voiceCommandHandler_openWidgetStudioParsed() {
+        val action1 = VoiceCommandHandler.parseUri("youcan://widget")
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenWidgetStudio, action1)
+
+        val action2 = VoiceCommandHandler.parseUri("youcan://studio")
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenWidgetStudio, action2)
+    }
+
+    @Test
+    fun voiceCommandHandler_allWidgetDeepLinksResolvedDirectlyToSpecificTabs() {
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenTimer, VoiceCommandHandler.parseUri("youcan://timer"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenTasks, VoiceCommandHandler.parseUri("youcan://tasks"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenCountdowns, VoiceCommandHandler.parseUri("youcan://countdown"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenCountdowns, VoiceCommandHandler.parseUri("youcan://countdowns"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenStreaks, VoiceCommandHandler.parseUri("youcan://streaks"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenStreaks, VoiceCommandHandler.parseUri("youcan://streak"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenHome, VoiceCommandHandler.parseUri("youcan://home"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenHome, VoiceCommandHandler.parseUri("youcan://quote"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenHome, VoiceCommandHandler.parseUri("youcan://quotes"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenUsage, VoiceCommandHandler.parseUri("youcan://usage"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenStats, VoiceCommandHandler.parseUri("youcan://analytics"))
+        assertEquals(VoiceCommandHandler.VoiceAction.OpenStats, VoiceCommandHandler.parseUri("youcan://stats"))
+    }
+
+    @Test
+    fun quoteProvider_cyclingIndicesNeverOutOfBoundsAndCyclesCorrectly() {
+        val totalQuotes = com.drnitz.youcan.domain.model.QuoteProvider.quotes.size
+        assertTrue(totalQuotes > 0)
+
+        for (i in -100..200) {
+            val normalized = ((i % totalQuotes) + totalQuotes) % totalQuotes
+            assertTrue(normalized in 0 until totalQuotes)
+            val quote = com.drnitz.youcan.domain.model.QuoteProvider.getQuoteByIndex(normalized)
+            assertNotNull(quote)
+            assertTrue(quote.text.isNotBlank())
+            assertTrue(quote.author.isNotBlank())
+        }
+    }
+
+    @Test
+    fun widgetReceivers_registeredClassesMatchComponents() {
+        assertEquals(com.drnitz.youcan.widget.TimerWidgetReceiver::class.java.simpleName, "TimerWidgetReceiver")
+        assertEquals(com.drnitz.youcan.widget.TasksWidgetReceiver::class.java.simpleName, "TasksWidgetReceiver")
+        assertEquals(com.drnitz.youcan.widget.CountdownWidgetReceiver::class.java.simpleName, "CountdownWidgetReceiver")
+        assertEquals(com.drnitz.youcan.widget.StreakWidgetReceiver::class.java.simpleName, "StreakWidgetReceiver")
+        assertEquals(com.drnitz.youcan.widget.DashboardWidgetReceiver::class.java.simpleName, "DashboardWidgetReceiver")
+        assertEquals(com.drnitz.youcan.widget.AnalyticsWidgetReceiver::class.java.simpleName, "AnalyticsWidgetReceiver")
+        assertEquals(com.drnitz.youcan.widget.QuoteWidgetReceiver::class.java.simpleName, "QuoteWidgetReceiver")
+        assertEquals(com.drnitz.youcan.widget.UsageWidgetReceiver::class.java.simpleName, "UsageWidgetReceiver")
     }
 }

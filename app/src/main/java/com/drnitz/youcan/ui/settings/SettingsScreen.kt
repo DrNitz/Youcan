@@ -62,6 +62,7 @@ fun SettingsScreen(
     onSetFloatingDock: (Boolean) -> Unit,
     onSetAmoledMode: (Boolean) -> Unit,
     onSetReducedMotion: (Boolean) -> Unit,
+    onNavigateToWidgetStudio: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -397,8 +398,12 @@ fun SettingsScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val intent = Intent(context, WidgetConfigActivity::class.java)
-                            context.startActivity(intent)
+                            if (onNavigateToWidgetStudio != null) {
+                                onNavigateToWidgetStudio()
+                            } else {
+                                val intent = Intent(context, WidgetConfigActivity::class.java)
+                                context.startActivity(intent)
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)

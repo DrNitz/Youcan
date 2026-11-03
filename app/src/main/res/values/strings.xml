@@ -38,4 +38,10 @@
     <string name="widget_countdown_desc">Track upcoming exams, deadlines, and milestone targets</string>
     <string name="widget_streak_name">Focus Streak (2x2)</string>
     <string name="widget_streak_desc">Track daily study consistency and freeze streak status</string>
+    <string name="widget_analytics_name">Study Analytics (2x2)</string>
+    <string name="widget_analytics_desc">Weekly focus minutes, completed sessions, and study trends</string>
+    <string name="widget_quote_name">Daily Quote (2x2)</string>
+    <string name="widget_quote_desc">Motivational quote of the day with quick refresh</string>
+    <string name="widget_usage_name">Digital Balance (2x2)</string>
+    <string name="widget_usage_desc">Screen time today and app usage summary</string>
 </resources>

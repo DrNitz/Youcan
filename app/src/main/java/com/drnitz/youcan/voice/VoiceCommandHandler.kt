@@ -21,6 +21,8 @@ object VoiceCommandHandler {
         object OpenStreaks : VoiceAction()
         object OpenUsage : VoiceAction()
         object OpenStats : VoiceAction()
+        object OpenWidgetStudio : VoiceAction()
+        object OpenHome : VoiceAction()
         object None : VoiceAction()
     }
 
@@ -56,6 +58,8 @@ object VoiceCommandHandler {
             host == "streak" || host == "streaks" -> VoiceAction.OpenStreaks
             host == "usage" -> VoiceAction.OpenUsage
             host == "stats" || host == "analytics" -> VoiceAction.OpenStats
+            host == "widget" || host == "widgets" || host == "studio" -> VoiceAction.OpenWidgetStudio
+            host == "home" || host == "quote" || host == "quotes" -> VoiceAction.OpenHome
             else -> VoiceAction.None
         }
     }

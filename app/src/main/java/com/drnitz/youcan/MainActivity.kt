@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -97,6 +99,7 @@ enum class AppDestination(val title: String, val icon: ImageVector) {
     ANALYTICS("Analytics", Icons.Rounded.BarChart),
     TASKS("Tasks", Icons.Rounded.CheckCircle),
     USAGE("Usage", Icons.Rounded.PhoneAndroid),
+    WIDGET_STUDIO("Widget Studio", Icons.Rounded.Widgets),
     SETTINGS("Settings", Icons.Rounded.Settings),
     MORE("More", Icons.Rounded.MoreHoriz)
 }
@@ -155,6 +158,9 @@ class MainActivity : ComponentActivity() {
             is VoiceCommandHandler.VoiceAction.OpenStats -> {
                 initialDestination.value = AppDestination.ANALYTICS
             }
+            is VoiceCommandHandler.VoiceAction.OpenWidgetStudio -> {
+                initialDestination.value = AppDestination.WIDGET_STUDIO
+            }
             is VoiceCommandHandler.VoiceAction.AddCountdown,
             is VoiceCommandHandler.VoiceAction.OpenCountdowns -> {
                 initialDestination.value = AppDestination.COUNTDOWNS
@@ -169,6 +175,9 @@ class MainActivity : ComponentActivity() {
             is VoiceCommandHandler.VoiceAction.AddTask,
             is VoiceCommandHandler.VoiceAction.OpenTasks -> {
                 initialDestination.value = AppDestination.TASKS
+            }
+            is VoiceCommandHandler.VoiceAction.OpenHome -> {
+                initialDestination.value = AppDestination.HOME
             }
             else -> {}
         }
@@ -187,13 +196,36 @@ fun MainAppScaffold(
     usageRepo: UsageRepository,
     preferences: com.drnitz.youcan.data.preferences.AppPreferences
 ) {
+    val configuration = LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
+
     val coroutineScope = rememberCoroutineScope()
     var currentDestination by remember { mutableStateOf(initialDestination) }
     var activeMoreSubDestination by remember { mutableStateOf<AppDestination?>(null) }
 
     LaunchedEffect(initialDestination) {
-        currentDestination = initialDestination
-        activeMoreSubDestination = null
+        if (!isWideScreen && initialDestination in listOf(
+                AppDestination.ANALYTICS,
+                AppDestination.TASKS,
+                AppDestination.USAGE,
+                AppDestination.WIDGET_STUDIO,
+                AppDestination.SETTINGS
+            )
+        ) {
+            currentDestination = AppDestination.MORE
+            activeMoreSubDestination = initialDestination
+        } else {
+            currentDestination = initialDestination
+            activeMoreSubDestination = null
+        }
+    }
+
+    BackHandler(enabled = activeMoreSubDestination != null || currentDestination != AppDestination.TIMER) {
+        if (activeMoreSubDestination != null) {
+            activeMoreSubDestination = null
+        } else {
+            currentDestination = AppDestination.TIMER
+        }
     }
 
     val sessions by sessionRepo.allSessions.collectAsStateWithLifecycle(emptyList())
@@ -229,9 +261,6 @@ fun MainAppScaffold(
         }
     }
 
-    val configuration = LocalConfiguration.current
-    val isWideScreen = configuration.screenWidthDp >= 600
-
     // For wide screens (tablets/foldables/landscape), all primary destinations appear in nav rail.
     // For compact phones, we display the top 4 + More.
     val visibleItems = if (isWideScreen) {
@@ -243,6 +272,7 @@ fun MainAppScaffold(
             AppDestination.ANALYTICS,
             AppDestination.TASKS,
             AppDestination.USAGE,
+            AppDestination.WIDGET_STUDIO,
             AppDestination.SETTINGS
         )
     } else {
@@ -267,6 +297,7 @@ fun MainAppScaffold(
                             AppDestination.ANALYTICS,
                             AppDestination.TASKS,
                             AppDestination.USAGE,
+                            AppDestination.WIDGET_STUDIO,
                             AppDestination.SETTINGS
                         )
                     } else {
@@ -300,6 +331,7 @@ fun MainAppScaffold(
                 AppDestination.ANALYTICS,
                 AppDestination.TASKS,
                 AppDestination.USAGE,
+                AppDestination.WIDGET_STUDIO,
                 AppDestination.SETTINGS
             )
         ) {
@@ -424,6 +456,22 @@ fun MainAppScaffold(
                             coroutineScope.launch {
                                 planRepo.copyPlansToDate(selectedTasksDate, selectedTasksDate.plusDays(1))
                             }
+                        },
+                        reminders = reminders,
+                        onToggleReminder = { item, isEnabled ->
+                            coroutineScope.launch {
+                                reminderRepo.updateReminder(item.copy(isEnabled = isEnabled))
+                            }
+                        },
+                        onDeleteReminder = { item ->
+                            coroutineScope.launch {
+                                reminderRepo.deleteReminder(item)
+                            }
+                        },
+                        onAddReminder = { title, hour, minute, daysOfWeek ->
+                            coroutineScope.launch {
+                                reminderRepo.addReminder(title, hour, minute, daysOfWeek)
+                            }
                         }
                     )
                 }
@@ -442,6 +490,17 @@ fun MainAppScaffold(
                                 usageList = usageRepo.getUsageForDay(LocalDate.now())
                             }
                         }
+                    )
+                }
+            }
+            AppDestination.WIDGET_STUDIO -> {
+                MoreSubScreenContainer(
+                    title = "Widget Studio",
+                    onBack = { activeMoreSubDestination = null }
+                ) {
+                    com.drnitz.youcan.widget.WidgetStudioScreen(
+                        isConfigActivity = false,
+                        onBack = { activeMoreSubDestination = null }
                     )
                 }
             }
@@ -472,6 +531,9 @@ fun MainAppScaffold(
                         },
                         onSetReducedMotion = { enabled ->
                             coroutineScope.launch { preferences.setReducedMotion(enabled) }
+                        },
+                        onNavigateToWidgetStudio = {
+                            activeMoreSubDestination = AppDestination.WIDGET_STUDIO
                         }
                     )
                 }
@@ -516,6 +578,7 @@ fun MoreHubScreen(
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
+        Triple(AppDestination.WIDGET_STUDIO, "Design live widgets, themes, transparency, and home screen pinning", Icons.Rounded.Widgets),
         Triple(AppDestination.ANALYTICS, "Weekly trends, distribution, peak study hours, and milestones", Icons.Rounded.BarChart),
         Triple(AppDestination.TASKS, "Scheduled study goals and custom task reminders", Icons.Rounded.CheckCircle),
         Triple(AppDestination.USAGE, "Screen time and distracting apps awareness", Icons.Rounded.PhoneAndroid),

@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -47,6 +48,7 @@ import com.drnitz.youcan.core.util.WidgetPinningHelper
 import com.drnitz.youcan.data.preferences.UserPreferences
 import com.drnitz.youcan.domain.model.Quote
 import com.drnitz.youcan.domain.model.QuoteProvider
+import com.drnitz.youcan.domain.model.TimerStatus
 import com.drnitz.youcan.service.timer.FocusTimerService
 import com.drnitz.youcan.service.timer.TimerStateManager
 import com.drnitz.youcan.widget.TimerWidgetReceiver
@@ -72,12 +74,19 @@ fun TimerScreen(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
 
+    LaunchedEffect(snapshot.status) {
+        if (snapshot.status == TimerStatus.RUNNING && !FocusTimerService.isRunning()) {
+            FocusTimerService.resumeTimer(context)
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         TimerBackgroundView(
             backgroundType = userPreferences.backgroundType,
             customWallpaperUri = userPreferences.customWallpaperUri,
             wallpaperBlurRadius = userPreferences.wallpaperBlurRadius,
-            wallpaperDimAlpha = userPreferences.wallpaperDimAlpha
+            wallpaperDimAlpha = userPreferences.wallpaperDimAlpha,
+            reducedMotionOverride = userPreferences.reducedMotionOverride
         )
 
         if (isLandscape) {
@@ -246,7 +255,7 @@ private fun TimerQuoteBanner(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "— ${quote.author}",
+                text = quote.author,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                 color = Color.White.copy(alpha = 0.72f),
                 textAlign = TextAlign.Center

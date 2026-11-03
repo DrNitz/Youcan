@@ -25,6 +25,7 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartService
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -58,6 +59,7 @@ import com.drnitz.youcan.domain.model.QuoteProvider
 import com.drnitz.youcan.domain.model.StreakData
 import com.drnitz.youcan.domain.model.TimerSnapshot
 import com.drnitz.youcan.domain.model.TimerStatus
+import com.drnitz.youcan.service.timer.FocusTimerService
 import com.drnitz.youcan.service.timer.TimerStateManager
 import kotlinx.coroutines.flow.firstOrNull
 import java.time.Instant
@@ -83,18 +85,20 @@ enum class WidgetLayoutMode(val displayName: String) {
     COMBO_VERTICAL("Stacked (Top & Bottom)")
 }
 
-enum class WidgetBackgroundTheme(val displayName: String, val colorHex: Long) {
-    FOREST("Deep Forest (Sage)", 0xFF161C19),
-    AMOLED("True Black AMOLED", 0xFF000000),
-    NAVY("Midnight Navy", 0xFF0E1626),
-    CHARCOAL("Dark Slate", 0xFF1E222A),
-    WARM_EARTH("Warm Espresso", 0xFF221C18)
+enum class WidgetBackgroundTheme(val displayName: String, val colorHex: Long, val defaultAlpha: Float = 0.95f) {
+    FOREST("Deep Forest (Sage)", 0xFF161C19, 0.95f),
+    AMOLED("True Black AMOLED", 0xFF000000, 1.0f),
+    NAVY("Midnight Navy", 0xFF0E1626, 0.95f),
+    CHARCOAL("Dark Slate", 0xFF1E222A, 0.95f),
+    WARM_EARTH("Warm Espresso", 0xFF221C18, 0.95f),
+    FROSTED_GLASS("Frosted Glass", 0xFF202A26, 0.70f)
 }
 
 open class YoucanGlanceWidget(
     private val defaultComp1: WidgetComponent = WidgetComponent.TIMER,
     private val defaultComp2: WidgetComponent = WidgetComponent.COUNTDOWN,
-    private val defaultLayoutMode: WidgetLayoutMode = WidgetLayoutMode.SINGLE
+    private val defaultLayoutMode: WidgetLayoutMode = WidgetLayoutMode.SINGLE,
+    private val isPresetWidget: Boolean = false
 ) : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Exact
@@ -106,26 +110,39 @@ open class YoucanGlanceWidget(
             GlanceAppWidgetManager(context).getAppWidgetId(id)
         } catch (_: Exception) { -1 }
 
+        val globalMode = if (!isPresetWidget) sp.getString("widget_layout_mode", null) else null
         val modeName = sp.getString("widget_${appWidgetId}_layout_mode", null)
             ?: sp.getString("widget_${glanceKey}_layout_mode", null)
+            ?: globalMode
             ?: defaultLayoutMode.name
         val layoutMode = try { WidgetLayoutMode.valueOf(modeName) } catch (_: Exception) { defaultLayoutMode }
 
+        val globalComp1 = if (!isPresetWidget) (sp.getString("widget_comp1", null) ?: sp.getString("widget_type", null)) else null
         val comp1Name = sp.getString("widget_${appWidgetId}_comp1", null)
             ?: sp.getString("widget_${glanceKey}_comp1", null)
-            ?: sp.getString("widget_type", defaultComp1.name)
+            ?: globalComp1
             ?: defaultComp1.name
         val comp1 = try { WidgetComponent.valueOf(comp1Name) } catch (_: Exception) { defaultComp1 }
 
+        val globalComp2 = if (!isPresetWidget) sp.getString("widget_comp2", null) else null
         val comp2Name = sp.getString("widget_${appWidgetId}_comp2", null)
             ?: sp.getString("widget_${glanceKey}_comp2", null)
+            ?: globalComp2
             ?: defaultComp2.name
         val comp2 = try { WidgetComponent.valueOf(comp2Name) } catch (_: Exception) { defaultComp2 }
 
         val themeName = sp.getString("widget_${appWidgetId}_theme", null)
             ?: sp.getString("widget_${glanceKey}_theme", null)
+            ?: sp.getString("widget_theme", null)
             ?: if (sp.getBoolean("widget_amoled", false)) WidgetBackgroundTheme.AMOLED.name else WidgetBackgroundTheme.FOREST.name
         val theme = try { WidgetBackgroundTheme.valueOf(themeName) } catch (_: Exception) { WidgetBackgroundTheme.FOREST }
+
+        val transparency = when {
+            sp.contains("widget_${appWidgetId}_transparency") -> sp.getFloat("widget_${appWidgetId}_transparency", theme.defaultAlpha)
+            sp.contains("widget_${glanceKey}_transparency") -> sp.getFloat("widget_${glanceKey}_transparency", theme.defaultAlpha)
+            sp.contains("widget_transparency") -> sp.getFloat("widget_transparency", theme.defaultAlpha)
+            else -> theme.defaultAlpha
+        }.coerceIn(0.20f, 1.0f)
 
         // Load real dynamic data from Room & System
         val app = context.applicationContext as? YoucanApplication
@@ -164,7 +181,13 @@ open class YoucanGlanceWidget(
         } catch (_: Exception) { emptyList() }
 
         // 5. Quote
-        val quoteIndex = sp.getInt("quote_index_$glanceKey", ((today.toEpochDay() % QuoteProvider.quotes.size).toInt() + QuoteProvider.quotes.size) % QuoteProvider.quotes.size)
+        val defaultQuoteIndex = ((today.toEpochDay() % QuoteProvider.quotes.size).toInt() + QuoteProvider.quotes.size) % QuoteProvider.quotes.size
+        val quoteIndex = when {
+            sp.contains("quote_index_$appWidgetId") -> sp.getInt("quote_index_$appWidgetId", defaultQuoteIndex)
+            sp.contains("quote_index_$glanceKey") -> sp.getInt("quote_index_$glanceKey", defaultQuoteIndex)
+            sp.contains("quote_index_global") -> sp.getInt("quote_index_global", defaultQuoteIndex)
+            else -> defaultQuoteIndex
+        }
         val quote = QuoteProvider.getQuoteByIndex(quoteIndex)
 
         // 6. Weekly Analytics
@@ -189,7 +212,8 @@ open class YoucanGlanceWidget(
             val isWide = size.width >= 250.dp
             val isTall = size.height >= 150.dp
 
-            val bgColor = Color(theme.colorHex)
+            val baseColor = Color(theme.colorHex)
+            val bgColor = baseColor.copy(alpha = transparency)
             val primarySage = Color(0xFF7EB09B)
             val textLight = Color(0xFFF1F3F0)
             val textMuted = Color(0xFFA6B0A9)
@@ -197,8 +221,8 @@ open class YoucanGlanceWidget(
             Box(
                 modifier = GlanceModifier
                     .fillMaxSize()
-                    .background(bgColor)
                     .cornerRadius(20.dp)
+                    .background(bgColor)
                     .padding(12.dp)
             ) {
                 when (layoutMode) {
@@ -441,13 +465,14 @@ open class YoucanGlanceWidget(
         if (isWide && !isCompact) {
             // Responsive Wide 4x2 / 3x2 layout
             Row(
-                modifier = GlanceModifier
-                    .fillMaxSize()
-                    .clickable(openAppAction("youcan://timer")),
+                modifier = GlanceModifier.fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(
-                    modifier = GlanceModifier.defaultWeight().fillMaxHeight(),
+                    modifier = GlanceModifier
+                        .defaultWeight()
+                        .fillMaxHeight()
+                        .clickable(openAppAction("youcan://timer")),
                     horizontalAlignment = Alignment.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -494,40 +519,45 @@ open class YoucanGlanceWidget(
         } else {
             // Standard / Compact layout
             Column(
-                modifier = GlanceModifier
-                    .fillMaxSize()
-                    .clickable(openAppAction("youcan://timer")),
+                modifier = GlanceModifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "${snapshot.phase.displayName} • ${snapshot.subject}",
-                    style = TextStyle(
-                        color = ColorProvider(primary),
-                        fontSize = if (isCompact) 11.sp else 12.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    maxLines = 1
-                )
+                Column(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .clickable(openAppAction("youcan://timer")),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "${snapshot.phase.displayName} • ${snapshot.subject}",
+                        style = TextStyle(
+                            color = ColorProvider(primary),
+                            fontSize = if (isCompact) 11.sp else 12.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        maxLines = 1
+                    )
 
-                Spacer(modifier = GlanceModifier.height(2.dp))
+                    Spacer(modifier = GlanceModifier.height(2.dp))
 
-                LiveTimerDisplay(
-                    snapshot = snapshot,
-                    fontSizeSp = if (isCompact) 24f else 32f,
-                    textColor = textLight
-                )
+                    LiveTimerDisplay(
+                        snapshot = snapshot,
+                        fontSizeSp = if (isCompact) 24f else 32f,
+                        textColor = textLight
+                    )
 
-                Spacer(modifier = GlanceModifier.height(2.dp))
+                    Spacer(modifier = GlanceModifier.height(2.dp))
 
-                Text(
-                    text = "$statusText (Cycle ${snapshot.currentCycle}/${snapshot.totalCycles})",
-                    style = TextStyle(
-                        color = ColorProvider(textMuted),
-                        fontSize = if (isCompact) 10.sp else 11.sp
-                    ),
-                    maxLines = 1
-                )
+                    Text(
+                        text = "$statusText (Cycle ${snapshot.currentCycle}/${snapshot.totalCycles})",
+                        style = TextStyle(
+                            color = ColorProvider(textMuted),
+                            fontSize = if (isCompact) 10.sp else 11.sp
+                        ),
+                        maxLines = 1
+                    )
+                }
 
                 Spacer(modifier = GlanceModifier.height(6.dp))
 
@@ -572,11 +602,14 @@ open class YoucanGlanceWidget(
         rv.setOnClickPendingIntent(R.id.widget_chronometer, pi)
         rv.setOnClickPendingIntent(R.id.widget_timer_text, pi)
 
-        if (snapshot.status == TimerStatus.RUNNING) {
-            val baseTime = if (snapshot.targetEndRealtime > 0L) {
+        val nowRealtime = SystemClock.elapsedRealtime()
+        val isRunning = snapshot.status == TimerStatus.RUNNING && (snapshot.targetEndRealtime > nowRealtime || snapshot.remainingSeconds > 0)
+
+        if (isRunning) {
+            val baseTime = if (snapshot.targetEndRealtime > nowRealtime) {
                 snapshot.targetEndRealtime
             } else {
-                SystemClock.elapsedRealtime() + (snapshot.remainingSeconds * 1000L)
+                nowRealtime + (snapshot.remainingSeconds * 1000L)
             }
             rv.setViewVisibility(R.id.widget_chronometer, View.VISIBLE)
             rv.setViewVisibility(R.id.widget_timer_text, View.GONE)
@@ -602,6 +635,16 @@ open class YoucanGlanceWidget(
         primary: Color,
         isCompact: Boolean
     ) {
+        val context = LocalContext.current
+        val pauseIntent = Intent(context, FocusTimerService::class.java).apply { action = FocusTimerService.ACTION_PAUSE }
+        val resumeIntent = Intent(context, FocusTimerService::class.java).apply { action = FocusTimerService.ACTION_RESUME }
+        val startIntent = Intent(context, FocusTimerService::class.java).apply { action = FocusTimerService.ACTION_START }
+        val stopIntent = Intent(context, FocusTimerService::class.java).apply { action = FocusTimerService.ACTION_STOP }
+        val addMinutesIntent = Intent(context, FocusTimerService::class.java).apply {
+            action = FocusTimerService.ACTION_ADD_MINUTES
+            putExtra(FocusTimerService.EXTRA_MINUTES, 5)
+        }
+
         Row(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically
@@ -612,8 +655,8 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color(0xFFE0A96D))
-                            .clickable(actionRunCallback<TimerPauseActionCallback>())
-                            .padding(horizontal = if (isCompact) 8.dp else 14.dp, vertical = 6.dp),
+                            .clickable(actionStartService(pauseIntent, isForegroundService = true))
+                            .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -632,8 +675,8 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color.White.copy(alpha = 0.16f))
-                            .clickable(actionRunCallback<TimerAddMinutesActionCallback>())
-                            .padding(horizontal = if (isCompact) 6.dp else 10.dp, vertical = 6.dp),
+                            .clickable(actionStartService(addMinutesIntent, isForegroundService = true))
+                            .padding(horizontal = if (isCompact) 8.dp else 12.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -652,8 +695,8 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color(0xFFE57373))
-                            .clickable(actionRunCallback<TimerStopActionCallback>())
-                            .padding(horizontal = if (isCompact) 8.dp else 14.dp, vertical = 6.dp),
+                            .clickable(actionStartService(stopIntent, isForegroundService = false))
+                            .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -671,8 +714,8 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(primary)
-                            .clickable(actionRunCallback<TimerResumeActionCallback>())
-                            .padding(horizontal = if (isCompact) 8.dp else 14.dp, vertical = 6.dp),
+                            .clickable(actionStartService(resumeIntent, isForegroundService = true))
+                            .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -691,8 +734,8 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color.White.copy(alpha = 0.16f))
-                            .clickable(actionRunCallback<TimerAddMinutesActionCallback>())
-                            .padding(horizontal = if (isCompact) 6.dp else 10.dp, vertical = 6.dp),
+                            .clickable(actionStartService(addMinutesIntent, isForegroundService = true))
+                            .padding(horizontal = if (isCompact) 8.dp else 12.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -711,8 +754,8 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(10.dp)
                             .background(Color(0xFFE57373))
-                            .clickable(actionRunCallback<TimerStopActionCallback>())
-                            .padding(horizontal = if (isCompact) 8.dp else 14.dp, vertical = 6.dp),
+                            .clickable(actionStartService(stopIntent, isForegroundService = false))
+                            .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 8.dp else 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -730,8 +773,8 @@ open class YoucanGlanceWidget(
                         modifier = GlanceModifier
                             .cornerRadius(12.dp)
                             .background(primary)
-                            .clickable(actionRunCallback<TimerStartActionCallback>())
-                            .padding(horizontal = if (isCompact) 10.dp else 16.dp, vertical = 7.dp),
+                            .clickable(actionStartService(startIntent, isForegroundService = true))
+                            .padding(horizontal = if (isCompact) 12.dp else 18.dp, vertical = if (isCompact) 9.dp else 11.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -744,14 +787,14 @@ open class YoucanGlanceWidget(
                         )
                     }
 
-                    Spacer(modifier = GlanceModifier.width(6.dp))
+                    Spacer(modifier = GlanceModifier.width(8.dp))
 
                     Box(
                         modifier = GlanceModifier
                             .cornerRadius(12.dp)
                             .background(Color.White.copy(alpha = 0.16f))
-                            .clickable(actionRunCallback<TimerAddMinutesActionCallback>())
-                            .padding(horizontal = if (isCompact) 8.dp else 12.dp, vertical = 7.dp),
+                            .clickable(actionStartService(addMinutesIntent, isForegroundService = true))
+                            .padding(horizontal = if (isCompact) 10.dp else 14.dp, vertical = if (isCompact) 9.dp else 11.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -1118,7 +1161,7 @@ open class YoucanGlanceWidget(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🔥 ${streakData.currentStreak}",
+                        text = "${streakData.currentStreak}",
                         style = TextStyle(
                             color = ColorProvider(Color(0xFFFF8A65)),
                             fontSize = 32.sp,
@@ -1152,7 +1195,7 @@ open class YoucanGlanceWidget(
                         )
                     )
                     Text(
-                        text = if (streakData.isGoalMetToday) "Daily Goal Met! 🎯" else "Best: ${streakData.longestStreak} days",
+                        text = if (streakData.isGoalMetToday) "Daily Goal Achieved" else "Best: ${streakData.longestStreak} days",
                         style = TextStyle(color = ColorProvider(textMuted), fontSize = 10.sp)
                     )
                     Spacer(modifier = GlanceModifier.height(4.dp))
@@ -1165,7 +1208,7 @@ open class YoucanGlanceWidget(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "⚡ +30m Study",
+                            text = "+30m Log",
                             style = TextStyle(color = ColorProvider(primary), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         )
                     }
@@ -1191,7 +1234,7 @@ open class YoucanGlanceWidget(
                 Spacer(modifier = GlanceModifier.height(2.dp))
 
                 Text(
-                    text = "🔥 ${streakData.currentStreak} Days",
+                    text = "${streakData.currentStreak} Days",
                     style = TextStyle(
                         color = ColorProvider(Color(0xFFFF8A65)),
                         fontSize = if (isCompact) 22.sp else 28.sp,
@@ -1209,7 +1252,7 @@ open class YoucanGlanceWidget(
                 )
 
                 Text(
-                    text = if (streakData.isGoalMetToday) "Daily Goal Met! 🎯" else "Best: ${streakData.longestStreak} days",
+                    text = if (streakData.isGoalMetToday) "Daily Goal Achieved" else "Best: ${streakData.longestStreak} days",
                     style = TextStyle(color = ColorProvider(textMuted), fontSize = 10.sp)
                 )
 
@@ -1223,7 +1266,7 @@ open class YoucanGlanceWidget(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "⚡ +30m Study",
+                        text = "+30m Log",
                         style = TextStyle(color = ColorProvider(primary), fontSize = if (isCompact) 9.sp else 10.sp, fontWeight = FontWeight.Bold)
                     )
                 }
@@ -1245,14 +1288,21 @@ open class YoucanGlanceWidget(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "“${quote.text}”",
-                style = TextStyle(
-                    color = ColorProvider(textLight),
-                    fontSize = if (isCompact) 11.sp else 12.sp
-                ),
-                maxLines = if (isCompact) 3 else 4
-            )
+            Column(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .clickable(openAppAction("youcan://home")),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "“${quote.text}”",
+                    style = TextStyle(
+                        color = ColorProvider(textLight),
+                        fontSize = if (isCompact) 11.sp else 12.sp
+                    ),
+                    maxLines = if (isCompact) 3 else 4
+                )
+            }
 
             Spacer(modifier = GlanceModifier.height(3.dp))
 
@@ -1261,32 +1311,33 @@ open class YoucanGlanceWidget(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "— ${quote.author}",
+                    text = quote.author,
                     style = TextStyle(
                         color = ColorProvider(primary),
                         fontSize = if (isCompact) 9.sp else 10.sp,
                         fontWeight = FontWeight.Bold
                     ),
-                    maxLines = 1
+                    maxLines = 1,
+                    modifier = GlanceModifier.clickable(openAppAction("youcan://home"))
                 )
                 Spacer(modifier = GlanceModifier.defaultWeight())
                 Box(
                     modifier = GlanceModifier
-                        .cornerRadius(6.dp)
-                        .background(Color.White.copy(alpha = 0.12f))
+                        .cornerRadius(8.dp)
+                        .background(Color.White.copy(alpha = 0.16f))
                         .clickable(
                             actionRunCallback<CycleQuoteActionCallback>(
                                 actionParametersOf(GlanceKeyActionKey to glanceKey)
                             )
                         )
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "Next ↻",
                         style = TextStyle(
-                            color = ColorProvider(textMuted),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Medium
+                            color = ColorProvider(textLight),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     )
                 }
@@ -1400,28 +1451,51 @@ open class YoucanGlanceWidget(
 // Specialized Preset Widget Implementations
 class TimerGlanceWidget : YoucanGlanceWidget(
     defaultComp1 = WidgetComponent.TIMER,
-    defaultLayoutMode = WidgetLayoutMode.SINGLE
+    defaultLayoutMode = WidgetLayoutMode.SINGLE,
+    isPresetWidget = true
 )
 
 class TasksGlanceWidget : YoucanGlanceWidget(
     defaultComp1 = WidgetComponent.TASKS,
-    defaultLayoutMode = WidgetLayoutMode.SINGLE
+    defaultLayoutMode = WidgetLayoutMode.SINGLE,
+    isPresetWidget = true
 )
 
 class CountdownGlanceWidget : YoucanGlanceWidget(
     defaultComp1 = WidgetComponent.COUNTDOWN,
-    defaultLayoutMode = WidgetLayoutMode.SINGLE
+    defaultLayoutMode = WidgetLayoutMode.SINGLE,
+    isPresetWidget = true
 )
 
 class StreakGlanceWidget : YoucanGlanceWidget(
     defaultComp1 = WidgetComponent.STREAK,
-    defaultLayoutMode = WidgetLayoutMode.SINGLE
+    defaultLayoutMode = WidgetLayoutMode.SINGLE,
+    isPresetWidget = true
 )
 
 class DashboardGlanceWidget : YoucanGlanceWidget(
     defaultComp1 = WidgetComponent.TIMER,
     defaultComp2 = WidgetComponent.TASKS,
-    defaultLayoutMode = WidgetLayoutMode.COMBO_HORIZONTAL
+    defaultLayoutMode = WidgetLayoutMode.COMBO_HORIZONTAL,
+    isPresetWidget = true
+)
+
+class AnalyticsGlanceWidget : YoucanGlanceWidget(
+    defaultComp1 = WidgetComponent.ANALYTICS,
+    defaultLayoutMode = WidgetLayoutMode.SINGLE,
+    isPresetWidget = true
+)
+
+class QuoteGlanceWidget : YoucanGlanceWidget(
+    defaultComp1 = WidgetComponent.QUOTE,
+    defaultLayoutMode = WidgetLayoutMode.SINGLE,
+    isPresetWidget = true
+)
+
+class UsageGlanceWidget : YoucanGlanceWidget(
+    defaultComp1 = WidgetComponent.USAGE,
+    defaultLayoutMode = WidgetLayoutMode.SINGLE,
+    isPresetWidget = true
 )
 
 // Specialized Receivers
@@ -1443,4 +1517,16 @@ class StreakWidgetReceiver : GlanceAppWidgetReceiver() {
 
 class DashboardWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = DashboardGlanceWidget()
+}
+
+class AnalyticsWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = AnalyticsGlanceWidget()
+}
+
+class QuoteWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = QuoteGlanceWidget()
+}
+
+class UsageWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = UsageGlanceWidget()
 }

@@ -63,12 +63,9 @@ class ToggleTaskActionCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val taskId = parameters[TaskIdActionKey] ?: return
         val app = context.applicationContext as? YoucanApplication ?: return
-        val dao = app.database.dailyPlanDao()
-        val plan = dao.getPlanById(taskId)
-        if (plan != null) {
-            dao.updatePlan(plan.copy(isCompleted = !plan.isCompleted))
-            WidgetUpdateHelper.updateAll(context)
-        }
+        val repo = com.drnitz.youcan.data.repository.PlanRepository(context, app.database.dailyPlanDao())
+        repo.togglePlanCompletion(taskId)
+        WidgetUpdateHelper.updateTaskWidgets(context)
     }
 }
 
@@ -76,9 +73,14 @@ class CycleQuoteActionCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val glanceKey = parameters[GlanceKeyActionKey] ?: glanceId.toString()
         val sp = context.getSharedPreferences("youcan_widget_prefs", Context.MODE_PRIVATE)
-        val currentIndex = sp.getInt("quote_index_$glanceKey", 0)
+        val today = java.time.LocalDate.now()
+        val defaultIndex = ((today.toEpochDay() % QuoteProvider.quotes.size).toInt() + QuoteProvider.quotes.size) % QuoteProvider.quotes.size
+        val currentIndex = sp.getInt("quote_index_$glanceKey", sp.getInt("quote_index_global", defaultIndex))
         val nextIndex = (currentIndex + 1) % QuoteProvider.quotes.size
-        sp.edit().putInt("quote_index_$glanceKey", nextIndex).apply()
+        sp.edit()
+            .putInt("quote_index_$glanceKey", nextIndex)
+            .putInt("quote_index_global", nextIndex)
+            .apply()
         WidgetUpdateHelper.updateAll(context)
     }
 }
@@ -94,7 +96,7 @@ class CycleCountdownActionCallback : ActionCallback {
         } catch (_: Exception) { 1 }
         val nextIndex = if (count > 0) (currentIndex + 1) % count else 0
         sp.edit().putInt("countdown_index_$glanceKey", nextIndex).apply()
-        WidgetUpdateHelper.updateAll(context)
+        WidgetUpdateHelper.updateCountdownWidgets(context)
     }
 }
 
@@ -115,7 +117,7 @@ class QuickLogStreakActionCallback : ActionCallback {
                     isManual = true
                 )
             )
-            WidgetUpdateHelper.updateAll(context)
+            WidgetUpdateHelper.updateStreakWidgets(context)
         } catch (_: Exception) {}
     }
 }

@@ -86,6 +86,11 @@ class PlanRepository(
         WidgetUpdateHelper.updateAll(context)
     }
 
+    suspend fun togglePlanCompletion(taskId: Long) {
+        val plan = dailyPlanDao.getPlanById(taskId) ?: return
+        togglePlanCompletion(plan.toDomain())
+    }
+
     suspend fun deleteTask(item: TaskItem) {
         cancelAlarm(item)
         dailyPlanDao.deletePlan(item.toEntity())

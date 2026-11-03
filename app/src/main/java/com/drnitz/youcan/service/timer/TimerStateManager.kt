@@ -90,7 +90,8 @@ object TimerStateManager {
     fun updateTime(remainingSeconds: Int) {
         val updated = _snapshot.value.copy(remainingSeconds = remainingSeconds)
         _snapshot.value = updated
-        persistState(updated)
+        // Note: Do not call persistState() on every 1-second tick to prevent flash I/O churn and battery drain.
+        // targetEndRealtime is already persisted on state transitions.
     }
 
     fun setStatus(status: TimerStatus) {
@@ -141,6 +142,7 @@ object TimerStateManager {
                 .putString("timer_note", snapshot.note)
                 .putLong("timer_target_end_realtime", snapshot.targetEndRealtime)
                 .apply()
+            runCatching { com.drnitz.youcan.widget.WidgetUpdateHelper.updateAll(com.drnitz.youcan.YoucanApplication.instance) }
         } catch (_: Exception) {}
     }
 }

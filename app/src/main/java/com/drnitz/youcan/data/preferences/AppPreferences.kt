@@ -91,12 +91,14 @@ class AppPreferences(private val context: Context) {
             prefs[Keys.LONG_BREAK_MINUTES] = longBreak
             prefs[Keys.CYCLES] = cycles
         }
+        runCatching { com.drnitz.youcan.widget.WidgetUpdateHelper.updateAll(context) }
     }
 
     suspend fun updateDailyGoal(goalMinutes: Int) {
         context.dataStore.edit { prefs ->
             prefs[Keys.DAILY_GOAL_MINUTES] = goalMinutes
         }
+        runCatching { com.drnitz.youcan.widget.WidgetUpdateHelper.updateAll(context) }
     }
 
     suspend fun updateBackground(
@@ -136,6 +138,7 @@ class AppPreferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[Keys.AMOLED_MODE] = enabled
         }
+        runCatching { com.drnitz.youcan.widget.WidgetUpdateHelper.updateAll(context) }
     }
 
     suspend fun setReducedMotion(enabled: Boolean) {

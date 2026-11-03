@@ -153,6 +153,42 @@
                 android:resource="@xml/streak_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".widget.AnalyticsWidgetReceiver"
+            android:label="@string/widget_analytics_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/analytics_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.QuoteWidgetReceiver"
+            android:label="@string/widget_quote_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quote_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.UsageWidgetReceiver"
+            android:label="@string/widget_usage_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/usage_widget_info" />
+        </receiver>
+
         <!-- Widget Configuration Activity -->
         <activity
             android:name=".widget.WidgetConfigActivity"

@@ -49,11 +49,14 @@ fun TimerBackgroundView(
     customWallpaperUri: String = "",
     wallpaperBlurRadius: Float = 10f,
     wallpaperDimAlpha: Float = 0.4f,
+    reducedMotionOverride: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val isPreview = LocalInspectionMode.current
-    val motionDisabled = remember { if (isPreview) true else isSystemReduceMotionOrPowerSaving(context) }
+    val motionDisabled = remember(reducedMotionOverride) {
+        if (isPreview) true else (reducedMotionOverride || isSystemReduceMotionOrPowerSaving(context))
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         when (backgroundType) {

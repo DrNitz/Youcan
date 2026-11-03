@@ -22,6 +22,7 @@ class StreakRepository(
         streakFreezeDao.insertFreeze(
             StreakFreezeEntity(dateEpochDay = date.toEpochDay())
         )
+        runCatching { com.drnitz.youcan.widget.WidgetUpdateHelper.updateAll(com.drnitz.youcan.YoucanApplication.instance) }
     }
 
     suspend fun isDateFrozen(date: LocalDate): Boolean {

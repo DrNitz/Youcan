@@ -14,10 +14,14 @@ class ExactAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val reminderId = intent.getLongExtra("reminder_id", 0L)
         val title = intent.getStringExtra("reminder_title") ?: "Scheduled Study Session"
+        val isCountdown = intent.getBooleanExtra("is_countdown", false)
+
+        val destinationUri = if (isCountdown) "youcan://countdowns" else "youcan://reminders/$reminderId"
+        val channelTitle = if (isCountdown) "Exam & Deadline Alert" else "Study Reminder"
 
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            data = android.net.Uri.parse("youcan://reminders/$reminderId")
+            data = android.net.Uri.parse(destinationUri)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -29,7 +33,7 @@ class ExactAlarmReceiver : BroadcastReceiver() {
 
         val notification = NotificationCompat.Builder(context, YoucanApplication.CHANNEL_REMINDERS_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Study Reminder")
+            .setContentTitle(channelTitle)
             .setContentText(title)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)

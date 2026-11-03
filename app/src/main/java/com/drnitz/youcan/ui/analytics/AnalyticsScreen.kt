@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.drnitz.youcan.core.util.WidgetPinningHelper
 import com.drnitz.youcan.data.local.entity.FocusSessionEntity
 import com.drnitz.youcan.domain.model.StreakData
-import com.drnitz.youcan.widget.DashboardWidgetReceiver
+import com.drnitz.youcan.widget.AnalyticsWidgetReceiver
 import nl.dionsegijn.konfetti.compose.KonfettiView
 import nl.dionsegijn.konfetti.core.Party
 import nl.dionsegijn.konfetti.core.Position
@@ -140,7 +140,7 @@ fun AnalyticsScreen(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                WidgetPinningHelper.pinWidget(context, DashboardWidgetReceiver::class.java, "Study Dashboard Widget")
+                                WidgetPinningHelper.pinWidget(context, AnalyticsWidgetReceiver::class.java, "Study Analytics Widget")
                             },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {

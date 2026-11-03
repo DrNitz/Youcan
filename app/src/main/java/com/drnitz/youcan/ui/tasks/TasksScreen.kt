@@ -28,9 +28,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,7 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.drnitz.youcan.core.util.WidgetPinningHelper
+import com.drnitz.youcan.domain.model.StudyReminderItem
 import com.drnitz.youcan.domain.model.TaskItem
+import com.drnitz.youcan.ui.reminders.RemindersScreen
 import com.drnitz.youcan.widget.TasksWidgetReceiver
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -61,8 +66,13 @@ fun TasksScreen(
     onDeleteTask: (TaskItem) -> Unit,
     onUpdateTaskReminder: (TaskItem, hasReminder: Boolean, hour: Int?, minute: Int?) -> Unit,
     onCopyTasksToTomorrow: () -> Unit,
+    reminders: List<StudyReminderItem> = emptyList(),
+    onToggleReminder: (StudyReminderItem, Boolean) -> Unit = { _, _ -> },
+    onDeleteReminder: (StudyReminderItem) -> Unit = {},
+    onAddReminder: (title: String, hour: Int, minute: Int, daysOfWeek: List<Int>) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
+    var selectedTab by remember { mutableIntStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
     var showCalendarPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -89,11 +99,30 @@ fun TasksScreen(
         )
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    Column(modifier = modifier.fillMaxSize()) {
+        PrimaryTabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.primary
+        ) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = { Text("Daily Tasks", style = MaterialTheme.typography.titleSmall) }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text("Study Reminders", style = MaterialTheme.typography.titleSmall) }
+            )
+        }
+
+        if (selectedTab == 0) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
         // Screen Header
         item {
             Row(
@@ -288,4 +317,13 @@ fun TasksScreen(
             }
         }
     }
+} else {
+    RemindersScreen(
+        reminders = reminders,
+        onToggleReminder = onToggleReminder,
+        onDeleteReminder = onDeleteReminder,
+        onAddReminder = onAddReminder
+    )
+}
+}
 }

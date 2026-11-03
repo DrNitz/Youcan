@@ -9,6 +9,7 @@
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
     android:configure="com.drnitz.youcan.widget.WidgetConfigActivity"
+    android:widgetFeatures="configuration_optional|reconfigurable"
     android:widgetCategory="home_screen"
     android:initialLayout="@layout/widget_initial_layout"
     android:description="@string/widget_custom_desc">

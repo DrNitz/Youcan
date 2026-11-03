@@ -16,10 +16,12 @@ class BootCompletedReceiver : BroadcastReceiver() {
             val app = context.applicationContext as? YoucanApplication ?: return
             val reminderRepository = ReminderRepository(app, app.database.reminderDao())
             val planRepository = com.drnitz.youcan.data.repository.PlanRepository(app, app.database.dailyPlanDao())
+            val countdownRepository = com.drnitz.youcan.data.repository.CountdownRepository(app, app.database.countdownDao())
 
             CoroutineScope(Dispatchers.IO).launch {
                 reminderRepository.rescheduleAllEnabledReminders()
                 planRepository.rescheduleAllReminders()
+                countdownRepository.rescheduleAllCountdowns()
             }
         }
     }
